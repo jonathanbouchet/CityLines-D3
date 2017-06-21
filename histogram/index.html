@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>London Transport System Lines</title>
+	<link rel="stylesheet" href="main.css">
+	<link rel="stylesheet" type="text/css" href="bootstrap.css">
+	<script  type="text/javascript" src="d3.min.js"></script>
+</head>
+<body>
+<!--Place all DOM elements here -->
+<script  type="text/javascript" src="data_all_cities.js"></script>
+<!--<script  type="text/javascript" src="data_london_minimum.js"></script>-->
+
+<script>
+var w =1200;
+var h =800;
+var margin ={
+	top: 20,
+	bottom: 60,
+	left: 200,
+	right: 60
+}
+var width = w - margin.left -margin.right
+var height = h - margin.top - margin.bottom
+	
+var x = d3.scale.linear()
+		.domain([0,d3.max(data, function(d){
+			return d.value;
+		})])
+		.range([0,width]) 
+
+var y = d3.scale.ordinal()
+		.domain(data.map(function(entry){
+			return entry.key;
+		}))
+		.rangeBands([0,height]);
+
+var linearColorScale = d3.scale.linear()
+						.domain([0,d3.max(data, function(d){
+							return d.value;
+						})])
+						.range(["#78B7C5", "#EBCC2A"]);
+
+var ordinalColorScale = d3.scale.category20();
+
+var xAxis = d3.svg.axis()
+			.scale(x)
+			.orient("bottom");
+
+var yAxis = d3.svg.axis()
+			.scale(y)
+			.orient("left");
+
+var xGridLines = d3.svg.axis()
+				 .scale(x)
+				 .tickSize(-height,0,0)
+				 .tickFormat("")
+				 .orient("top")
+
+var svg = d3.select("body").append("svg")
+			.attr("id", "chart")
+			.attr("width",w)
+			.attr("height",h);
+
+var chart = svg.append("g")
+			.classed("display",true)
+			.attr("transform","translate(" + margin.left + "," + margin.top + ")");
+
+var controls = d3.select("body")
+			   .append("div")
+			   .attr("id","controls");
+
+var sort_btn = controls.append("button")
+			   .attr("class","btn btn-primary")
+               .html("Sort data: ascending")
+               .attr("state",0);
+
+function drawAxis(params){
+	if(params.initialized===true){
+		//draw grid
+		this.append("g")
+			.call(xGridLines)
+			.classed('gridline',true)
+			.attr("transform","translate(0,0)");
+
+		//draw the x-axis
+		this.append("g")
+			.classed("x axis",true)
+			.attr("transform","translate(" + 0 + "," + height + ")")
+			.call(xAxis);
+
+		//draw the y-axis
+		this.append("g")
+			.classed("y axis",true)
+			.attr("transform","translate(0,0)")
+			.call(yAxis);
+
+		//draw the x-axis label	
+		this.select(".x.axis")
+			.append("text")
+			.attr("transform","translate(" + width/2 + "," + 40 + ")")
+            .text("Total length (km) ");
+
+	} else if(params.initialized===false){
+		//update info
+		this.selectAll("g.x.axis")
+			.call(params.axis.x);
+		this.selectAll("y-axis-label")
+			.style("text-anchor","end")
+		this.selectAll("g.y.axis")
+			.call(params.axis.y);
+	}
+}	
+
+function plot(params){
+	//update domains for every update calls
+	x.domain([0,d3.max(data, function(d){
+			return d.value;
+		})]);
+	y.domain(data.map(function(entry){
+			return entry.key;
+		}));
+
+	drawAxis.call(this, params);
+
+	//enter phase
+	this.selectAll(".bar")
+		.data(params.data)
+		.enter()
+			.append("rect")
+			.classed("bar",true)
+			.on("mouseover",function(d,i){
+				d3.select(this).style("fill","#F21A00")
+			})
+			.on("mouseout",function(d,i){
+				d3.select(this).style("fill",linearColorScale(d.value));
+			});
+	this.selectAll(".bar-label")
+		.data(params.data)
+		.enter()
+			.append("text")
+			.classed("bar-label",true); 
+
+	//update phase
+	this.selectAll(".bar")	
+		.transition()	
+		.attr("x",0)
+		.attr("y", function(d,i){
+			return y(d.key);
+		})
+		.attr("width", function(d,i){
+			return x(d.value);
+		})
+		.attr("height", function(d,i){
+			return y.rangeBand()-1;
+		})
+		.style("fill",function(d,i){
+			return linearColorScale(d.value);
+		});
+
+	this.selectAll(".bar-label")
+		.transition()
+		.attr("x", function(d,i){
+				return x(d.value)
+			})
+		.attr("dx",-4)
+		.attr("y", function(d,i){
+			return y(d.key);
+		})
+		.attr("dy",function(d,i){
+			return y.rangeBand()/1.5+2;
+		})
+		.text(function(d,i){
+			return(d3.round(d.value, 0))
+		});
+
+	//exit phase
+	this.selectAll(".bar")
+		.data(params.data)
+		.exit()
+		.remove()
+	this.selectAll(".bar-label")
+		.data(params.data)
+		.exit()
+		.remove()
+}
+
+sort_btn.on("click",function(){
+	var self = d3.select(this);
+
+	var ascending = function(a,b){
+		return a.value - b.value;
+	}
+
+	var descending = function(a,b){
+		return b.value - a.value;
+	}
+
+	var state = +self.attr("state");
+	var txt = "Sort data: ";
+	if(state===0){
+		data.sort(ascending);
+		state = 1
+		txt += "descending";
+	} else if (state===1){
+		data.sort(descending);
+		state = 0
+		txt += "ascending";
+	}
+	self.attr("state",state);
+	self.html(txt);
+
+	plot.call(chart,{
+		data: data,
+			axis: {
+		x: xAxis,
+		y: yAxis
+	},
+	gridlines: xGridLines,
+		initialized: false
+	}); 
+});
+
+plot.call(chart,{
+	data: data,
+		axis: {
+		x: xAxis,
+		y: yAxis
+	},
+	gridlines: xGridLines,
+	initialized: true
+});
+</script>	
+</body>
+</html>
