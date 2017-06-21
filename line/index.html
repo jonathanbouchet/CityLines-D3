@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Tot length vs Years</title>
+	<link rel="stylesheet" href="main.css">
+	<script  type="text/javascript" src="d3.min.js"></script>
+</head>
+<body>
+<!--Place all DOM elements here -->
+<script  type="text/javascript" src="london_data.js"></script>
+<!--<script  type="text/javascript" src="london_tokyo_data.js"></script>-->
+<script>
+var w = 1200;
+var h = 800;
+var margin = {
+	top: 60,
+	bottom: 80,
+	left: 100,
+	right: 100
+};
+var width = w - margin.left - margin.right;
+var height = h - margin.top - margin.bottom;
+
+var svg = d3.select("body").append("svg")
+			.attr("id", "chart")
+			.attr("width", w)
+			.attr("height", h);
+
+var chart = svg.append("g")
+			.classed("display", true)
+			.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+var dateParser = d3.time.format("%Y/%m/%d").parse;
+
+var colorScale = d3.scale.category10();
+
+// Define the div for the tooltip
+var div = d3.select("body").append("div")       
+    .attr("class", "tooltip")                           
+    .style("opacity", 0);
+
+var formatTime = d3.time.format("%Y");
+
+var x = d3.time.scale()
+		.domain(d3.extent(data,function(d){
+			return dateParser(d.date)
+		}))
+		.range([0, width]);
+
+var y = d3.scale.linear()
+		.domain([0,2000])
+		.range([height,0]);
+
+var xAxis = d3.svg.axis()
+                .scale(x)
+                .orient("bottom")
+                .tickFormat(d3.time.format("%Y"));
+
+var yAxis = d3.svg.axis()
+			.scale(y)
+			.orient("left");
+
+var yGridLines = d3.svg.axis()
+					.scale(y)
+					.tickSize(-width,0,0)
+					.tickFormat("")
+					.orient("left");
+
+var xGridLines = d3.svg.axis()
+					.scale(x)
+					.tickSize(-height,0,0)
+					.tickFormat("")
+					.orient("bottom");
+
+function drawAxis(params){
+	this.append("g")
+		.classed("gridline x",true)
+		.attr("transform","translate(" + 0 + "," + height + ") ")
+		.call(params.axis.gridline.x);
+
+	this.append("g")
+		.classed("gridline y",true)
+		.attr("transform","translate(0,0)")
+		.call(params.axis.gridline.y);
+
+	this.append("g")
+		.classed("axis x",true)
+		.attr("transform","translate(" + 0 + "," + height + ") ")
+		.call(params.axis.x);
+
+	this.append("g")
+		.classed("axis y",true)
+		.attr("transform","translate(0,0)")
+		.call(params.axis.y);
+	
+	this.append("g")
+		.append("text")
+		.classed("chart-header",true)
+		.attr("transform","translate(0,0)")
+		.text("");
+
+	this.select(".y.axis")
+		.append("text")
+		.classed("y axis-label",true)
+		.text("Total length (km)")
+		.attr("transform","translate(" + -60 + ", " + height/2 + ") rotate(-90)")
+
+	this.select(".x.axis")
+		.append("text")
+		.classed("x axis-label",true)
+		.text("Year")
+		.attr("transform","translate(" + width/2 + ", " + 60 + ")")
+}
+
+function plot(params){
+	drawAxis.call(this, params); 
+	//self refers to chart
+	var self = this;
+	//get the city names
+	var cities = d3.keys(params.data[0]).filter(function(d){
+		return d!== "date";
+	});
+	
+	//create a class by city
+	//enter()
+	this.selectAll(".city")
+		.data(cities)
+		.enter()
+			.append("g")
+			.attr("class",function(d){
+				return d;
+			})
+			.classed("city",true);
+
+	//update() for color by group
+	this.selectAll(".city")
+		.style("fill",function(d,i){
+			return colorScale(i);
+		})
+
+		// .on("mouseover",function(d){
+		// 	div.transition()                     
+  //               .style("opacity", 1);          
+  //           div.html(function(d){
+		// 		return formatTime(dateParser(d.date));
+  //           })
+	 //        .style("left", (d3.event.pageX) + "px")            
+	 //        .style("top", (d3.event.pageY - 28) + "px");     
+		// })
+		.on("mouseover",function(d,i){
+			d3.select(this)
+				.transition()
+				.style("opacity",1)
+		})
+		.on("mouseout",function(d,i){
+			d3.select(this)
+				.transition()
+				.style("opacity",.5);
+		});
+
+	//iterate over cities	
+	cities.forEach(function(city){
+		var g = self.selectAll("g."+city);
+		var arr = params.data.map(function(d){
+				return{
+					key:city,
+					value: d[city], //d[london], d[tokyo] ...
+					date: d.date
+				};
+		});
+		//enter
+		g.selectAll(".totLength")
+			.data(arr)
+			.enter()
+				.append("circle")
+				.classed("totLength",true);
+		//update
+		g.selectAll(".totLength")
+			.attr("r",3)
+			.attr("cx", function(d){
+			var date = dateParser(d.date)
+			return x(date);
+			})
+		.attr("cy", function(d){
+			return y(d.value);
+		})
+		.on("mouseover", function(d) {	
+			var date = dateParser(d.date)	
+            div.transition()		
+                .duration(200)		
+                .style("opacity", .9);		
+            div.html("Year : " + formatTime(date) + "<br/>"  + "Total : " + d3.round(d.value,0))	
+                .style("left", (d3.event.pageX) + "px")		
+                .style("top", (d3.event.pageY - 10) + "px");	
+            })					
+        .on("mouseout", function(d) {		
+            div.transition()		
+                .duration(500)		
+                .style("opacity", 0);	
+        });
+        /*
+		.on("mouseover",function(d,i){
+			var str = d.key + ", Transport System length:";
+			var date = dateParser(d.date)
+			str += d3.round(d.value,0);
+			str += ", for year " + formatTime(date);
+			//console.log(str);
+			d3.select(".chart-header").text(str);
+		})
+		.on("mouseout",function(d,i){
+			d3.select(".chart-header").text("");
+		})
+		*/
+		//exit
+		g.selectAll(".totLength")
+			.data(arr)
+			.exit()
+			.remove();
+	});	
+
+}
+plot.call(chart, {
+	data: data,
+	axis:{
+		y:yAxis,
+		x:xAxis,
+		gridline:{
+			y:yGridLines,
+			x:xGridLines
+		}
+	}
+})
+</script>
+</body>
+</html>
